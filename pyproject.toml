@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oracle-mcp-server"
+version = "0.1.0"
+description = "Read-only Oracle DB MCP server for AI agents."
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.27,<2",
+  "oracledb>=2.4,<4",
+  "pydantic>=2.7,<3",
+  "python-dotenv>=1.0,<2",
+  "PyYAML>=6.0,<7"
+]
+
+[project.scripts]
+oracle-mcp = "oracle_mcp.server:main"
+oracle-mcp-check = "oracle_mcp.check:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

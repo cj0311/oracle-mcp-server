@@ -1,0 +1,19 @@
+defaults:
+  max_rows: 500
+  query_timeout_seconds: 30
+  sample_rows: 20
+
+profiles:
+  dev:
+    description: "Development Oracle database"
+    user: "${DEV_ORACLE_USER}"
+    password: "${DEV_ORACLE_PASSWORD}"
+    dsn: "dev-db.company.local:1521/DEV"
+    default_owner: "APP_SCHEMA"
+
+  test:
+    description: "Test Oracle database"
+    user: "${TEST_ORACLE_USER}"
+    password: "${TEST_ORACLE_PASSWORD}"
+    dsn: "test-db.company.local:1521/TEST"
+    default_owner: "APP_SCHEMA"

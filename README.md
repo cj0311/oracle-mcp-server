@@ -1,0 +1,191 @@
+# Oracle MCP Server
+
+AI agent가 Oracle DB를 읽기 전용으로 조회할 수 있게 해주는 Python 기반 MCP 서버입니다.
+
+## 현재 범위
+
+- 여러 Oracle DB profile 지원
+- `stdio` MCP transport 기본 지원
+- Oracle Thin mode 기본 사용
+- `SELECT` / `WITH` 쿼리만 허용
+- table/view/procedure/function/package 메타데이터 조회
+- row limit, query timeout 적용
+- DB 비밀번호는 `.env` 또는 OS 환경변수에서 주입
+
+## MCP 도구
+
+- `list_profiles`: 등록된 DB profile 목록 조회
+- `test_connection`: Oracle 접속 테스트
+- `list_tables`: 접근 가능한 table/view 목록 조회
+- `list_views`: 접근 가능한 view 목록 조회
+- `describe_table`: table/view 컬럼과 primary key 조회
+- `describe_view`: view 컬럼 조회
+- `get_view_definition`: view SQL 정의 조회
+- `sample_rows`: table/view 샘플 row 조회
+- `list_procedures`: procedure/function/package 목록 조회
+- `describe_procedure`: procedure/function 인자 조회
+- `get_object_source`: procedure/function/package source 조회
+- `run_select_query`: 읽기 전용 SQL 실행
+
+프로시저와 함수는 실행하지 않습니다. `list_procedures`, `describe_procedure`, `get_object_source`는 Oracle dictionary view를 읽어서 구조와 소스만 조회합니다.
+
+## 폐쇄망 개발 PC 준비
+
+사내 Nexus PyPI simple URL을 pip 기본 저장소로 설정합니다.
+
+```powershell
+python -m pip config --user set global.index-url "https://nexus주소/repository/abc-pypi-std/simple/"
+```
+
+사내 인증서 문제가 있을 때만 임시로 trusted host를 설정합니다.
+
+```powershell
+python -m pip config --user set global.trusted-host "nexus주소"
+```
+
+설정 확인:
+
+```powershell
+python -m pip config list -v
+```
+
+## 설치
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
+
+확인:
+
+```powershell
+oracle-mcp --help
+oracle-mcp-check --help
+python -c "import mcp, oracledb, pydantic, dotenv, yaml; print('ok')"
+python -c "import oracledb; print(oracledb.version); print(oracledb.is_thin_mode())"
+```
+
+## DB profile 설정
+
+```powershell
+Copy-Item profiles.example.yaml profiles.yaml
+Copy-Item .env.example .env
+```
+
+`profiles.yaml` 예시:
+
+```yaml
+defaults:
+  max_rows: 500
+  query_timeout_seconds: 30
+  sample_rows: 20
+
+profiles:
+  dev:
+    description: "Development Oracle database"
+    user: "${DEV_ORACLE_USER}"
+    password: "${DEV_ORACLE_PASSWORD}"
+    dsn: "dev-db.company.local:1521/DEV"
+    default_owner: "APP_SCHEMA"
+```
+
+`.env` 예시:
+
+```ini
+ORACLE_MCP_CONFIG=profiles.yaml
+DEV_ORACLE_USER=readonly_user
+DEV_ORACLE_PASSWORD=change-me
+```
+
+`dsn`은 보통 아래 형식 중 하나를 씁니다.
+
+```text
+host:port/service_name
+host:port/sid
+tns_alias
+```
+
+TNS alias나 wallet이 필요하면 profile에 `config_dir`, `wallet_location`, `wallet_password`를 추가합니다.
+
+## 로컬 실행
+
+```powershell
+oracle-mcp --config profiles.yaml --transport stdio
+```
+
+`stdio`는 MCP host가 서버 프로세스를 직접 실행해서 stdin/stdout으로 통신하는 방식입니다. 일반 터미널에서 실행하면 대기 상태처럼 보이는 것이 정상입니다.
+
+## OpenCode 등록 예시
+
+OpenCode는 MCP 서버를 최상위 `mcp` 키 아래에 등록합니다. `mcpServers`가 아닙니다.
+Python 실행 파일과 config 경로는 절대경로를 권장합니다.
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "oracle-db": {
+      "type": "local",
+      "command": [
+        "C:\\path\\to\\oracle-mcp\\.venv\\Scripts\\python.exe",
+        "-m",
+        "oracle_mcp",
+        "--config",
+        "C:\\path\\to\\oracle-mcp\\profiles.yaml"
+      ],
+      "cwd": "C:\\path\\to\\oracle-mcp",
+      "enabled": true,
+      "timeout": 30000
+    }
+  }
+}
+```
+
+프로젝트별 설정은 작업 디렉터리의 `opencode.json` 또는 `opencode.jsonc`에 넣습니다. 전역 설정은 `~/.config/opencode/opencode.json`에 넣을 수 있습니다.
+
+등록 후 OpenCode에서 다음처럼 확인합니다.
+
+```powershell
+opencode mcp list
+```
+
+프롬프트 테스트:
+
+```text
+use the oracle-db tool to list profiles
+```
+
+## 테스트
+
+Oracle 접속 없이 가능한 단위 테스트:
+
+```powershell
+python -m unittest discover -s tests
+```
+
+Oracle 접속 테스트는 MCP tool의 `test_connection`으로 수행합니다.
+
+MCP client를 붙이기 전에 로컬에서 먼저 확인하려면:
+
+```powershell
+oracle-mcp-check --config profiles.yaml
+oracle-mcp-check --config profiles.yaml --profile dev
+oracle-mcp-check --config profiles.yaml --profile dev --metadata
+```
+
+`--metadata`는 table, view, procedure dictionary view 접근까지 같이 확인합니다.
+
+## 안전 제한
+
+`run_select_query`는 다음을 차단합니다.
+
+- `INSERT`, `UPDATE`, `DELETE`, `MERGE`
+- `CREATE`, `ALTER`, `DROP`, `TRUNCATE`
+- `BEGIN`, `DECLARE`, `CALL`, `EXECUTE`
+- multiple statements
+- `SELECT FOR UPDATE`
+- `DBMS_*`, `UTL_*` 패키지 호출
+
+이 제한은 실수 방지용입니다. 실제 DB 권한은 반드시 read-only 계정으로 분리하는 것이 좋습니다.

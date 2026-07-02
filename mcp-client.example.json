@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "oracle-db": {
+      "command": "C:\\path\\to\\oracle-mcp\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "oracle_mcp",
+        "--config",
+        "C:\\path\\to\\oracle-mcp\\profiles.yaml"
+      ]
+    }
+  }
+}
