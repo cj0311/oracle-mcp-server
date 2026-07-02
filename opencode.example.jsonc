@@ -14,5 +14,9 @@
       "enabled": true,
       "timeout": 30000
     }
+  },
+  "permission": {
+    "*": "ask",
+    "oracle-db_*": "allow"
   }
 }

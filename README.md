@@ -139,9 +139,15 @@ Python 실행 파일과 config 경로는 절대경로를 권장합니다.
       "enabled": true,
       "timeout": 30000
     }
+  },
+  "permission": {
+    "*": "ask",
+    "oracle-db_*": "allow"
   }
 }
 ```
+
+`permission`에서 `oracle-db_*`는 `oracle-db` MCP 서버가 노출하는 모든 도구를 의미합니다. 위 설정은 다른 OpenCode 도구는 계속 승인받고, 이 Oracle MCP 도구만 자동 실행합니다.
 
 프로젝트별 설정은 작업 디렉터리의 `opencode.json` 또는 `opencode.jsonc`에 넣습니다. 전역 설정은 `~/.config/opencode/opencode.json`에 넣을 수 있습니다.
 
