@@ -597,15 +597,16 @@ def execute_query(
             cursor.execute(safe_sql, binds or {})
             rows = cursor.fetchmany(limit + 1)
             columns = unique_column_names(cursor.description or [])
+            truncated = len(rows) > limit
+            visible_rows = rows[:limit]
+            serialized_rows = [serialize_row(columns, row) for row in visible_rows]
 
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-    truncated = len(rows) > limit
-    visible_rows = rows[:limit]
     return {
         "profile": profile_name,
         "columns": columns,
-        "rows": [serialize_row(columns, row) for row in visible_rows],
-        "row_count": len(visible_rows),
+        "rows": serialized_rows,
+        "row_count": len(serialized_rows),
         "truncated": truncated,
         "limit": limit,
         "elapsed_ms": elapsed_ms,
@@ -634,6 +635,8 @@ def serialize_row(columns: list[str], row: Any) -> dict[str, Any]:
 def serialize_value(value: Any) -> Any:
     if value is None or isinstance(value, bool | int | float | str):
         return truncate_string(value) if isinstance(value, str) else value
+    if isinstance(value, oracledb.LOB):
+        return serialize_lob(value)
     if isinstance(value, decimal.Decimal):
         return str(value)
     if isinstance(value, dt.datetime):
@@ -650,6 +653,34 @@ def serialize_value(value: Any) -> Any:
     if hasattr(value, "read"):
         return serialize_value(value.read())
     return truncate_string(str(value))
+
+
+def serialize_lob(value: oracledb.LOB) -> Any:
+    lob_type = value.type
+    lob_size = value.size()
+    lob_name = str(lob_type).replace("<DbType DB_TYPE_", "").replace(">", "")
+
+    if lob_type in (oracledb.DB_TYPE_CLOB, oracledb.DB_TYPE_NCLOB):
+        if lob_size <= MAX_CELL_CHARS:
+            return value.read()
+        data = value.read(1, MAX_CELL_CHARS)
+        return {
+            "type": lob_name,
+            "value": data,
+            "truncated": True,
+            "original_length": lob_size,
+        }
+
+    if lob_type in (oracledb.DB_TYPE_BLOB, oracledb.DB_TYPE_BFILE):
+        data = value.read(1, min(lob_size, MAX_BINARY_BYTES))
+        return {
+            "type": lob_name,
+            "length": lob_size,
+            "base64_prefix": base64.b64encode(data).decode("ascii"),
+            "truncated": lob_size > MAX_BINARY_BYTES,
+        }
+
+    return truncate_string(str(value.read()))
 
 
 def truncate_string(value: str) -> str | dict[str, Any]:

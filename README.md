@@ -9,6 +9,7 @@ AI agent가 Oracle DB를 읽기 전용으로 조회할 수 있게 해주는 Pyth
 - Oracle Thin mode 기본 사용
 - `SELECT` / `WITH` 쿼리만 허용
 - table/view/procedure/function/package 메타데이터 조회
+- CLOB/NCLOB/BLOB/BFILE 컬럼 JSON 직렬화 지원
 - row limit, query timeout 적용
 - DB 비밀번호는 `.env` 또는 OS 환경변수에서 주입
 
@@ -234,6 +235,8 @@ oracle-mcp-check --config profiles.yaml --profile dev --metadata
 ```
 
 `--metadata`는 table, view, procedure dictionary view 접근까지 같이 확인합니다.
+
+조회 결과에 CLOB/NCLOB/BLOB/BFILE 컬럼이 있으면 연결이 살아있는 동안 읽어서 반환합니다. 큰 CLOB/NCLOB은 앞부분만 반환하고 `truncated`, `original_length`를 함께 표시합니다. BLOB/BFILE은 base64 prefix와 전체 길이를 반환합니다.
 
 ## 안전 제한
 
