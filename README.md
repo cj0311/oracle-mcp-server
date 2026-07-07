@@ -29,7 +29,7 @@ AI agent가 Oracle DB를 읽기 전용으로 조회할 수 있게 해주는 Pyth
 
 프로시저와 함수는 실행하지 않습니다. `list_procedures`, `describe_procedure`, `get_object_source`는 Oracle dictionary view를 읽어서 구조와 소스만 조회합니다.
 
-## 폐쇄망 개발 PC 준비
+## 폐쇄망 개발 PC 준비 - Nexus 가능 환경
 
 사내 Nexus PyPI simple URL을 pip 기본 저장소로 설정합니다.
 
@@ -48,6 +48,50 @@ python -m pip config --user set global.trusted-host "nexus주소"
 ```powershell
 python -m pip config list -v
 ```
+
+## 폐쇄망 개발 PC 준비 - Nexus 불가 환경
+
+Nexus도 접근할 수 없는 완전 폐쇄망 PC에는 소스만 반입하면 안 됩니다. Python 패키지 wheel 묶음인 `wheelhouse`를 같이 반입해야 합니다.
+
+Nexus 연결이 되는 PC 또는 인터넷 연결이 되는 PC에서 offline bundle을 만듭니다.
+
+```powershell
+.\scripts\build-offline-bundle.ps1
+```
+
+생성 결과:
+
+```text
+dist\oracle-mcp-offline-bundle.zip
+```
+
+이 zip을 Nexus 불가 폐쇄망 PC로 반입한 뒤 압축을 풉니다.
+
+```text
+oracle-mcp-offline-bundle\
+  source\
+  wheelhouse\
+```
+
+설치:
+
+```powershell
+cd oracle-mcp-offline-bundle\source
+.\scripts\install-offline.ps1
+```
+
+개발/수정까지 해야 해서 source editable 설치가 필요하면:
+
+```powershell
+.\scripts\install-offline.ps1 -Editable
+```
+
+주의사항:
+
+- `wheelhouse`는 OS, CPU 아키텍처, Python minor version에 영향을 받습니다.
+- 예를 들어 Windows x64 + Python 3.11에서 만든 bundle은 Windows x64 + Python 3.11에서 쓰는 것이 안전합니다.
+- Python 3.12 PC에 설치할 예정이면 Python 3.12 환경에서 offline bundle을 다시 만들어야 합니다.
+- Python 실행 파일 자체는 별도로 설치되어 있어야 합니다. 필요하면 Python installer도 같이 반입합니다.
 
 ## 설치
 
