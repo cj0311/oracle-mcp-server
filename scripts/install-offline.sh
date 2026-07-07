@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -n "${PYTHONHOME:-}" || -n "${PYTHONPATH:-}" ]]; then
+  echo "Ignoring PYTHONHOME/PYTHONPATH while creating the virtual environment." >&2
+  unset PYTHONHOME
+  unset PYTHONPATH
+fi
+export PYTHONNOUSERSITE=1
+
 PYTHON_BIN="${PYTHON:-python3.12}"
 VENV_DIR="${VENV:-.venv}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

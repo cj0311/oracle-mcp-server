@@ -107,6 +107,21 @@ sudo env PREFIX=/opt/python-3.12.10 bash install-standalone-python-rhel9.sh
 PYTHON=/opt/python-3.12.10/bin/python3.12 bash scripts/install-offline.sh
 ```
 
+`ModuleNotFoundError: No module named 'encodings'` 또는 `could not find platform independent libraries <prefix>` 오류가 나면 Python 경로 환경변수나 압축 해제 상태를 먼저 확인합니다.
+
+```bash
+unset PYTHONHOME PYTHONPATH
+ls -l "$HOME/.local/python-3.12.10/lib/python3.12/encodings/__init__.py"
+"$HOME/.local/python-3.12.10/bin/python3.12" -c "import sys, encodings; print(sys.prefix); print(encodings.__file__)"
+```
+
+`encodings/__init__.py`가 없다면 standalone Python을 다시 풉니다.
+
+```bash
+cd ~/oracle-mcp/rhel9
+FORCE=1 bash install-standalone-python-rhel9.sh
+```
+
 개발/수정까지 해야 해서 source editable 설치가 필요하면:
 
 ```powershell
