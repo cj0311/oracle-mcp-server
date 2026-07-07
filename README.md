@@ -80,6 +80,13 @@ cd oracle-mcp-offline-bundle\source
 .\scripts\install-offline.ps1
 ```
 
+Linux x86_64 서버용 bundle은 Linux 서버에서 아래처럼 설치합니다.
+
+```bash
+cd oracle-mcp-offline-bundle-py312-linux-x86_64/source
+bash scripts/install-offline.sh
+```
+
 개발/수정까지 해야 해서 source editable 설치가 필요하면:
 
 ```powershell
@@ -91,6 +98,7 @@ cd oracle-mcp-offline-bundle\source
 - `wheelhouse`는 OS, CPU 아키텍처, Python minor version에 영향을 받습니다.
 - 예를 들어 Windows x64 + Python 3.11에서 만든 bundle은 Windows x64 + Python 3.11에서 쓰는 것이 안전합니다.
 - Python 3.12 PC에 설치할 예정이면 Python 3.12 환경에서 offline bundle을 다시 만들어야 합니다.
+- Linux 서버는 Linux x86_64용 bundle을 따로 사용해야 합니다. Windows용 bundle의 `win_amd64` wheel은 Linux에서 설치되지 않습니다.
 - Python 실행 파일 자체는 별도로 설치되어 있어야 합니다. 필요하면 Python installer도 같이 반입합니다.
 
 ## 설치
