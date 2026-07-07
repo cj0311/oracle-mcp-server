@@ -88,6 +88,25 @@ cd oracle-mcp-offline-bundle-py312-linux-x86_64/source
 bash scripts/install-offline.sh
 ```
 
+RHEL9 서버에 Python 3.12가 없고 repo도 접근할 수 없다면, RHEL9 handoff에 포함된 standalone Python을 먼저 설치합니다.
+
+```bash
+unzip oracle-mcp-handoff-py312-rhel9-x86_64.zip -d oracle-mcp-rhel9
+cd oracle-mcp-rhel9
+bash install-standalone-python-rhel9.sh
+export PATH="$HOME/.local/python-3.12.10/bin:$PATH"
+unzip oracle-mcp-offline-bundle-py312-linux-x86_64.zip -d oracle-mcp-offline-bundle-py312-linux-x86_64
+cd oracle-mcp-offline-bundle-py312-linux-x86_64/source
+bash scripts/install-offline.sh
+```
+
+서버 공용 위치에 설치하려면 root 권한으로 `PREFIX`를 지정합니다.
+
+```bash
+sudo env PREFIX=/opt/python-3.12.10 bash install-standalone-python-rhel9.sh
+PYTHON=/opt/python-3.12.10/bin/python3.12 bash scripts/install-offline.sh
+```
+
 개발/수정까지 해야 해서 source editable 설치가 필요하면:
 
 ```powershell
