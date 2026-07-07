@@ -27,6 +27,7 @@ $items = @(
     "README.md",
     "mcp-client.example.json",
     "opencode.example.jsonc",
+    "opencode.remote-http.example.jsonc",
     "profiles.example.yaml",
     "pyproject.toml",
     "requirements.txt",

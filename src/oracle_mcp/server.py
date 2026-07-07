@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import logging
 import sys
 from typing import Any, Callable
@@ -26,9 +27,23 @@ from .db import (
 logger = logging.getLogger(__name__)
 
 
-def build_server(config_path: str | None = None) -> FastMCP:
+def build_server(
+    config_path: str | None = None,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    streamable_http_path: str = "/mcp",
+    log_level: str = "INFO",
+) -> FastMCP:
     config = load_config(config_path)
-    mcp = FastMCP("Oracle DB MCP Server", json_response=True)
+    mcp = FastMCP(
+        "Oracle DB MCP Server",
+        host=host,
+        port=port,
+        streamable_http_path=streamable_http_path,
+        json_response=True,
+        log_level=log_level,  # type: ignore[arg-type]
+    )
 
     @mcp.tool()
     def list_profiles() -> dict[str, Any]:
@@ -315,6 +330,113 @@ def ok(**values: Any) -> dict[str, Any]:
     return {"ok": True, **values}
 
 
+class IpAllowListMiddleware:
+    """ASGI middleware that rejects HTTP requests from non-allowed client IPs."""
+
+    def __init__(self, app: Any, allowed_ips: list[str]) -> None:
+        self.app = app
+        self.allowed_networks = compile_ip_allow_list(allowed_ips)
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        client = scope.get("client")
+        client_host = client[0] if client else None
+        if not client_host or not is_ip_allowed(client_host, self.allowed_networks):
+            logger.warning(
+                "Rejected MCP HTTP request from %s", client_host or "unknown"
+            )
+            body = b"Forbidden"
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 403,
+                    "headers": [
+                        (b"content-type", b"text/plain; charset=utf-8"),
+                        (b"content-length", str(len(body)).encode("ascii")),
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        await self.app(scope, receive, send)
+
+
+def compile_ip_allow_list(
+    allowed_ips: list[str],
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for value in allowed_ips:
+        for part in value.split(","):
+            spec = part.strip()
+            if not spec:
+                continue
+            networks.append(ipaddress.ip_network(spec, strict=False))
+    return tuple(networks)
+
+
+def is_ip_allowed(
+    client_host: str,
+    allowed_networks: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...],
+) -> bool:
+    if not allowed_networks:
+        return True
+
+    try:
+        address = ipaddress.ip_address(client_host)
+    except ValueError:
+        return False
+
+    candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        candidates.append(address.ipv4_mapped)
+
+    return any(
+        candidate in network
+        for candidate in candidates
+        for network in allowed_networks
+    )
+
+
+def normalize_http_path(path: str) -> str:
+    normalized = path.strip()
+    if not normalized:
+        raise ValueError("HTTP path must not be empty.")
+    if any(char.isspace() for char in normalized):
+        raise ValueError("HTTP path must not contain whitespace.")
+    if "?" in normalized or "#" in normalized:
+        raise ValueError("HTTP path must not contain query strings or fragments.")
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    if len(normalized) > 1:
+        normalized = normalized.rstrip("/")
+    return normalized
+
+
+def run_streamable_http_server(mcp: FastMCP, allowed_ips: list[str]) -> None:
+    if not allowed_ips:
+        logger.warning(
+            "MCP HTTP server is running without --allow-ip. "
+            "Restrict access with a host firewall or pass --allow-ip."
+        )
+        mcp.run(transport="streamable-http")
+        return
+
+    import uvicorn
+
+    app = mcp.streamable_http_app()
+    app.add_middleware(IpAllowListMiddleware, allowed_ips=allowed_ips)
+    uvicorn.run(
+        app,
+        host=mcp.settings.host,
+        port=mcp.settings.port,
+        log_level=mcp.settings.log_level.lower(),
+    )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Read-only Oracle DB MCP server for AI agents."
@@ -330,11 +452,45 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="MCP transport. Use stdio for local agent integration.",
     )
     parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host/IP to bind for streamable-http. Defaults to 127.0.0.1.",
+    )
+    parser.add_argument(
+        "--port",
+        default=8000,
+        type=int,
+        help="Port to bind for streamable-http. Defaults to 8000.",
+    )
+    parser.add_argument(
+        "--path",
+        default="/mcp",
+        help="HTTP path for streamable-http. Defaults to /mcp.",
+    )
+    parser.add_argument(
+        "--allow-ip",
+        dest="allowed_ips",
+        action="append",
+        default=[],
+        help=(
+            "Allowed client IP or CIDR for streamable-http. "
+            "Repeat or comma-separate values. If omitted, all client IPs are allowed."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         default="WARNING",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535.")
+    try:
+        args.path = normalize_http_path(args.path)
+        compile_ip_allow_list(args.allowed_ips)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return args
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -345,10 +501,20 @@ def main(argv: list[str] | None = None) -> None:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     try:
-        mcp = build_server(args.config)
+        mcp = build_server(
+            args.config,
+            host=args.host,
+            port=args.port,
+            streamable_http_path=args.path,
+            log_level=args.log_level,
+        )
     except ConfigError as exc:
         logger.error("%s", exc)
         raise SystemExit(2) from exc
+
+    if args.transport == "streamable-http":
+        run_streamable_http_server(mcp, args.allowed_ips)
+        return
 
     mcp.run(transport=args.transport)
 

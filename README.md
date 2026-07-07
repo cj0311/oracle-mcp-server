@@ -204,6 +204,27 @@ oracle-mcp --config profiles.yaml --transport stdio
 
 `stdio`는 MCP host가 서버 프로세스를 직접 실행해서 stdin/stdout으로 통신하는 방식입니다. 일반 터미널에서 실행하면 대기 상태처럼 보이는 것이 정상입니다.
 
+HTTP MCP로 서버에 상시 실행하려면 `streamable-http` transport를 사용합니다.
+
+```bash
+.venv/bin/oracle-mcp \
+  --config profiles.yaml \
+  --transport streamable-http \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --path /mcp \
+  --allow-ip 10.10.10.25
+```
+
+허용 IP는 반복하거나 comma-separated 형식으로 여러 개 지정할 수 있습니다.
+
+```bash
+--allow-ip 10.10.10.25 --allow-ip 10.10.20.0/24
+--allow-ip 10.10.10.25,10.10.20.0/24
+```
+
+`--allow-ip`는 서버가 실제로 보는 client IP 기준입니다. VPN, NAT, proxy를 거치면 로컬 PC IP가 아니라 NAT/proxy 출구 IP를 넣어야 할 수 있습니다. `--allow-ip`를 생략하면 HTTP endpoint에 접근 가능한 모든 IP가 MCP를 호출할 수 있으므로, 서버 방화벽에서도 접근 IP를 제한하는 것을 권장합니다.
+
 ## OpenCode 등록 예시
 
 OpenCode는 MCP 서버를 최상위 `mcp` 키 아래에 등록합니다. `mcpServers`가 아닙니다.
@@ -225,6 +246,25 @@ Python 실행 파일과 config 경로는 절대경로를 권장합니다.
       "cwd": "C:\\path\\to\\oracle-mcp",
       "enabled": true,
       "timeout": 30000
+    }
+  },
+  "permission": {
+    "*": "ask",
+    "oracle-db_*": "allow"
+  }
+}
+```
+
+HTTP MCP로 Linux 서버에 띄운 경우 OpenCode에는 remote MCP로 등록합니다.
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "oracle-db": {
+      "type": "remote",
+      "url": "http://서버IP:8000/mcp",
+      "enabled": true
     }
   },
   "permission": {
